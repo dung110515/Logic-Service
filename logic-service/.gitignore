@@ -45,3 +45,8 @@ prisma/.env
 
 # Docker
 .dockerignore
+
+# Google Sheets Credentials (SENSITIVE - DO NOT COMMIT)
+credentials/
+credentials/*.json
+*.json.backup

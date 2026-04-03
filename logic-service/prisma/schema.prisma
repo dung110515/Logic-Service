@@ -1,0 +1,254 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ ENUMS ============
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+  TRAINING
+}
+
+enum CourseStatus {
+  ACTIVE
+  ARCHIVED
+  CLOSED
+}
+
+enum SubStatus {
+  PENDING
+  GRADED
+}
+
+enum QuizStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum TicketStatus {
+  OPEN
+  AI_ANSWERED
+  CLOSED
+}
+
+// ============ MODELS ============
+
+// 5.3.3.1. User
+model User {
+  id        String   @id @default(uuid())
+  discordId String   @unique
+  userCode  String?  @unique
+  fullName  String
+  email     String?  @unique
+  role      Role     @default(STUDENT)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  enrollments              Enrollment[]
+  uploadedDocuments        Document[]
+  submittedAssignments     Submission[]
+  gradesGiven              Grade[]
+  teacherCourses           Course[] @relation("teacherCourses")
+  createdTickets           Ticket[]
+  quizResults              QuizResult[]
+}
+
+// 5.3.3.2. Course
+model Course {
+  id               String   @id @default(uuid())
+  code             String   @unique
+  name             String
+  semester         String
+  discordServerId  String   @unique
+  instructorId     String
+  status           CourseStatus @default(ACTIVE)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  instructor       User     @relation("teacherCourses", fields: [instructorId], references: [id])
+  enrollments      Enrollment[]
+  documents        Document[]
+  assignments      Assignment[]
+  quizzes          Quiz[]
+  tickets          Ticket[]
+
+  @@index([instructorId])
+}
+
+// 5.3.3.2. Enrollment
+model Enrollment {
+  id        String   @id @default(uuid())
+  userId    String
+  courseId  String
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+// 5.3.3.3. Document
+model Document {
+  id              String   @id @default(uuid())
+  courseId        String
+  uploadedById    String
+  fileName        String
+  fileUrl         String
+  fileType        String   // pdf|pptx|docx|txt
+  isAiIndexed     Boolean  @default(false)
+  aiSummary       String?  @db.Text
+  discordMessageId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  uploadedBy      User     @relation(fields: [uploadedById], references: [id])
+  quizzes         Quiz[]
+
+  @@index([courseId])
+  @@index([uploadedById])
+}
+
+// 5.3.3.4. Assignment
+model Assignment {
+  id        String   @id @default(uuid())
+  courseId  String
+  title     String
+  deadline  DateTime
+  maxScore  Float    @default(10)
+  rubricUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@index([courseId])
+}
+
+// 5.3.3.4. Submission
+model Submission {
+  id           String   @id @default(uuid())
+  assignmentId String
+  studentId    String
+  fileUrl      String
+  isLate       Boolean  @default(false)
+  aiScore      Float?
+  aiSummary    String?  @db.Text
+  status       SubStatus @default(PENDING)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student      User     @relation(fields: [studentId], references: [id])
+  grade        Grade?
+
+  @@unique([assignmentId, studentId])
+  @@index([assignmentId])
+  @@index([studentId])
+}
+
+// 5.3.3.4. Grade
+model Grade {
+  id           String   @id @default(uuid())
+  submissionId String   @unique
+  score        Float
+  comment      String?  @db.Text
+  gradedById   String
+  gradedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  gradedBy     User     @relation(fields: [gradedById], references: [id])
+
+  @@index([submissionId])
+  @@index([gradedById])
+}
+
+// 5.3.3.5. Quiz
+model Quiz {
+  id            String   @id @default(uuid())
+  courseId      String
+  documentId    String
+  title         String
+  questionsJson Json?
+  timeLimitMins Int     @default(15)
+  status        QuizStatus @default(DRAFT)
+  webUrl        String?
+  deadline      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  document      Document @relation(fields: [documentId], references: [id])
+  results       QuizResult[]
+
+  @@index([courseId])
+  @@index([documentId])
+}
+
+// 5.3.3.5. QuizResult
+model QuizResult {
+  id          String   @id @default(uuid())
+  quizId      String
+  studentId   String
+  score       Float
+  answersJson Json?
+  completedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student     User     @relation(fields: [studentId], references: [id])
+
+  @@unique([quizId, studentId])
+  @@index([quizId])
+  @@index([studentId])
+}
+
+// 5.3.3.5. Ticket
+model Ticket {
+  id         String   @id @default(uuid())
+  studentId  String
+  courseId   String
+  question   String   @db.Text
+  aiAnswer   String?  @db.Text
+  needsHuman Boolean  @default(false)
+  status     TicketStatus @default(OPEN)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  student    User     @relation(fields: [studentId], references: [id])
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([courseId])
+}

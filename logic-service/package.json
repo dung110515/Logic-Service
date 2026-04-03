@@ -12,7 +12,9 @@
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "prisma:studio": "prisma studio --schema prisma/schema.prisma"
   },
   "keywords": [],
   "author": "",

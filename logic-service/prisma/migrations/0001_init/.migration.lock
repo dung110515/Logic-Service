@@ -1,0 +1,6 @@
+{
+  "version": "5.8.0",
+  "dialect": "postgresql",
+  "hash": "00000000000000000000000000000001",
+  "name": "init"
+}

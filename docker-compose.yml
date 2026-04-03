@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   zookeeper:
     image: bitnami/zookeeper:7.7.0
@@ -95,25 +97,10 @@ services:
       - kafka
 
 volumes:
-  zookeeper_data:
-  kafka_data:
-  postgres_data:
-  pgadmin_data:
-  redis_data:
-  redis_insight_data:
-  minio_data:
-
-# 1. pgAdmin (để manage DB)
-pgadmin:
-  image: dpage/pgadmin4:latest
-  ports:
-    - "5050:80"
-  environment:
-    PGADMIN_DEFAULT_EMAIL: admin@soa.local
-    PGADMIN_DEFAULT_PASSWORD: admin
-
-# 2. Redis Insight (optional, để debug Redis)
-redis-insight:
-  image: redislabs/redisinsight:latest
-  ports:
-    - "8001:8001"
+  zookeeper_data: {}
+  kafka_data: {}
+  postgres_data: {}
+  pgadmin_data: {}
+  redis_data: {}
+  redis_insight_data: {}
+  minio_data: {}
