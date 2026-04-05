@@ -1,13 +1,32 @@
 /**
- * Users Routes
- * REST API endpoints cho User management
+ * Users Routes - REST API Cho User Management
+ * ============================================
  * 
  * Endpoints:
- * - GET /v1/users - Danh sách users
- * - GET /v1/users/:id - Chi tiết user
- * - POST /v1/users - Tạo user mới
- * - PUT /v1/users/:id - Cập nhật user
- * - DELETE /v1/users/:id - Xóa user
+ * ├── GET  /v1/users           - Lấy danh sách users (paginated, filterable)
+ * ├── GET  /v1/users/:id       - Chi tiết 1 user
+ * ├── POST /v1/users           - Tạo user mới (ADMIN only)
+ * ├── PUT  /v1/users/:id       - Cập nhật user (ADMIN or self)
+ * └── DELETE /v1/users/:id     - Xóa user (ADMIN only)
+ * 
+ * Authentication: Tất cả endpoints yêu cầu X-Service-Token header
+ * 
+ * Response Format (Success):
+ * {
+ *   "success": true,
+ *   "statusCode": 200,
+ *   "message": "Users fetched successfully",
+ *   "data": [...],
+ *   "meta": { "page": 1, "pageSize": 10, "total": 100 }  // Nếu paginated
+ * }
+ * 
+ * Response Format (Error):
+ * {
+ *   "success": false,
+ *   "statusCode": 400,
+ *   "message": "Validation error",
+ *   "error": { ... }
+ * }
  */
 
 import { Router, Request, Response } from 'express';
@@ -18,29 +37,46 @@ import prisma from '../lib/prisma';
 
 const router = Router();
 
-// Áp dụng auth middleware cho tất cả routes
+// ===== MIDDLEWARE =====
+// Áp dụng authentication cho tất cả endpoints
 router.use(requireAuth);
 
 /**
  * GET /v1/users
- * Lấy danh sách users (paginated)
+ * Lấy danh sách users với pagination & filtering
+ * 
+ * Query Parameters:
+ * - page (optional): Số trang, mặc định 1, min 1
+ * - limit (optional): Số items/trang, mặc định 10, max 100
+ * - role (optional): Filter theo role (STUDENT, TEACHER, ADMIN, TRAINING)
+ * 
+ * Response:
+ * - 200: Danh sách users + metadata pagination
+ * - 400: Validation error (input không hợp lệ)
+ * - 401: Unauthorized (missing auth token)
+ * 
+ * @example
+ * GET /v1/users?page=1&limit=20&role=STUDENT
  */
 router.get(
   '/',
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
+    // ===== Validate & Parse Query Parameters =====
     const { page = '1', limit = '10', role } = req.query;
 
     const pageNum = Math.max(1, parseInt(page as string) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 10));
     const skip = (pageNum - 1) * limitNum;
 
-    // Build filter
+    // ===== Build Filter Object =====
+    // Chỉ filter theo role nếu nó là valid role
     const where: any = {};
     if (role && ['STUDENT', 'TEACHER', 'ADMIN', 'TRAINING'].includes(role as string)) {
       where.role = (role as string).toUpperCase();
     }
 
-    // Query
+    // ===== Query Database =====
+    // Lấy data + count tổng cộng (parallel)
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
@@ -54,11 +90,12 @@ router.get(
         },
         skip,
         take: limitNum,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' }, // Newest first
       }),
       prisma.user.count({ where }),
     ]);
 
+    // ===== Format Response =====
     const response: PaginatedAPIResponse<UserDTO[]> = {
       success: true,
       statusCode: 200,

@@ -1,6 +1,40 @@
 /**
- * Cấu hình biến môi trường - Load và validate từ .env
- * Sử dụng Zod để kiểm tra kiểu dữ liệu (type-safe)
+ * Environment Configuration & Validation
+ * =====================================
+ * 
+ * Mục đích:
+ * - Load environment variables from .env file
+ * - Validate types and values using Zod schema
+ * - Provide type-safe config object to entire application
+ * - Fail early if required vars missing
+ * 
+ * Configuration Sources (in order):
+ * 1. Load .env file from project root
+ * 2. Load Google Sheets credentials if file path provided
+ * 3. Use system environment variables
+ * 4. Fall back to schema defaults
+ * 
+ * Validation with Zod:
+ * ```typescript
+ * const envSchema = z.object({
+ *   DATABASE_URL: z.string(),        // Required
+ *   PORT: z.coerce.number().default(8003),  // Optional with default
+ *   LOG_LEVEL: z.enum([...]).default('info')  // Enum
+ * });
+ * 
+ * // If validation fails: print errors + exit(1)
+ * ```
+ * 
+ * This Pattern is Best Practice:
+ * ✅ Type-safe config (TypeScript knows all properties)
+ * ✅ Fail early (startup fails if config invalid)
+ * ✅ Self-documenting (each var has JSDoc)
+ * ✅ Runtime validation (catches .env typos)
+ * ✅ Defaults provided (no undefined surprises)
+ * 
+ * Development vs Production:
+ * - Dev: verbose logs, defaults allow local testing
+ * - Prod: enforce strong requirements (SERVICE_TOKEN_SECRET, etc)
  */
 
 import { z } from 'zod';
@@ -8,9 +42,9 @@ import dotenv from 'dotenv';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
 
-/**
- * Load .env file từ project root
- */
+// ===== Load .env File =====
+// Reads .env from project root before process.env is used
+// If file not found: warning logged, continues with process.env
 const envFilePath = resolve(process.cwd(), '.env');
 const dotenvResult = dotenv.config({ path: envFilePath });
 
@@ -23,9 +57,9 @@ if (dotenvResult.error) {
   }
 }
 
-/**
- * Load Google Sheets credentials từ file nếu GOOGLE_CREDENTIALS_JSON_FILE được cấu hình
- */
+// ===== Load Google Sheets Credentials =====
+// If GOOGLE_CREDENTIALS_JSON_FILE points to file: read and load into process.env
+// Allows storing sensitive credentials in file instead of environment variable
 if (process.env.GOOGLE_CREDENTIALS_JSON_FILE && !process.env.GOOGLE_CREDENTIALS_JSON) {
   try {
     const credFilePath = resolve(process.cwd(), process.env.GOOGLE_CREDENTIALS_JSON_FILE);
@@ -36,9 +70,19 @@ if (process.env.GOOGLE_CREDENTIALS_JSON_FILE && !process.env.GOOGLE_CREDENTIALS_
   }
 }
 
+// ===== Helper Functions =====
+
+/**
+ * Check if string starts with any of the allowed prefixes
+ * Example: hasAllowedPrefix('postgresql://...', ['postgresql://', 'mysql://']) → true
+ */
 const hasAllowedPrefix = (value: string, prefixes: string[]): boolean =>
   prefixes.some(prefix => value.startsWith(prefix));
 
+/**
+ * Format URL endpoint for safe display (hide credentials)
+ * Example: postgresql://user:pass@host:5432/db → postgresql://host:5432/db
+ */
 const formatSafeEndpoint = (value: string): string => {
   try {
     const parsed = new URL(value);
@@ -50,40 +94,95 @@ const formatSafeEndpoint = (value: string): string => {
   }
 };
 
-// ============================================
-// SCHEMA VALIDATION (Zod)
-// ============================================
+// ===== ZOD SCHEMA DEFINITION =====
+// Defines all environment variables with type, validation, and defaults
 
 /**
- * Schema định nghĩa tất cả biến môi trường bắt buộc
- * Zod sẽ validate kiểu dữ liệu, giá trị mặc định, v.v.
+ * Schema for Environment Variable Validation
+ * ===========================================
+ *
+ * Order:
+ * 1. z.object({...}) - define all variables and their schemas
+ * 2. .superRefine(...) - custom validation rules
+ * 
+ * Variable Types:
+ * - z.string() - required string
+ * - z.string().optional() - optional string
+ * - z.enum([...]) - must be one of: 'dev' | 'prod'
+ * - z.coerce.number() - parse string as number
+ * - .default('value') - use if not provided
+ * - .refine(fn, 'msg') - custom validation function
+ * - .min(1, 'msg') - string length validation
  */
 const envSchema = z.object({
-  // ===== NODE.js & Express =====
+  // ===== Node.js & Express Configuration =====
+  
   /**
-   * Môi trường chạy: development | staging | production
-   * Dev: logs chi tiết, stack traces
-   * Production: logs tối thiểu, no stack traces
+   * NODE_ENV: Runtime environment
+   * ==============================
+   * Values: 'development' | 'staging' | 'production'
+   * 
+   * Affects:
+   * - development: verbose logs, SQL queries logged
+   * - production: minimal logs, Redis caching required
+   * 
+   * Default: 'development' (safe for local testing)
    */
   NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
 
   /**
-   * Cổng server Express lắng nghe
-   * Mặc định: 8003
+   * PORT: Express server listening port
+   * ==================================
+   * Type: number (z.coerce parses string → number)
+   * Default: 8003
+   * Examples: 3000, 8000, 8003, 5000
    */
   PORT: z.coerce.number().default(8003),
 
   /**
-   * Secret key cho X-Service-Token validation
-   * Dùng để xác thực các request từ service khác (Web Service, Proxy, v.v.)
+   * SERVICE_TOKEN_SECRET: HMAC signing key
+   * ====================================
+   * Purpose: Sign/verify X-Service-Token header for service-to-service auth
+   * 
+   * Token Flow:
+   * 1. Service A generates token: HMAC-SHA256(payload, SECRET)
+   * 2. Service A sends: X-Service-Token: service:timestamp:signature
+   * 3. Logic Service verifies using same SECRET
+   * 4. If hash matches: request is authenticated
+   * 
+   * Security Requirements:
+   * - Development: optional (can use default)
+   * - Production: required, min 16 characters (strong)
+   * 
+   * Format Examples:
+   * - "my-super-secret-key-1234567890"
+   * - "randomly-generated-secure-token"
    */
   SERVICE_TOKEN_SECRET: z.string().optional(),
 
   // ===== DATABASE (PostgreSQL) =====
+  
   /**
-   * Connection string PostgreSQL
-   * Format: postgresql://user:password@host:port/database
-   * Ví dụ: postgresql://soa:soa@localhost:5432/logic
+   * DATABASE_URL: PostgreSQL connection string
+   * =========================================
+   * Required: yes
+   * Format: postgresql://[user[:password]@]host[:port]/database
+   * 
+   * Examples:
+   * - postgresql://soa:soa@localhost:5432/logic (local)
+   * - postgresql://user:pass@db.prod.io:5432/db (production)
+   * - postgresql://postgres@postgres:5432/postgres (Docker)
+   * 
+   * Connection Details Extracted:
+   * - Host: database server address
+   * - Port: 5432 (default PostgreSQL port)
+   * - User/Password: authentication
+   * - Database: which database to use
+   * 
+   * Prisma uses this to:
+   * - Create connection pool (10 connections by default)
+   * - Execute queries (prisma.user.findMany(), etc)
+   * - Run migrations
    */
   DATABASE_URL: z
     .string()
@@ -94,30 +193,70 @@ const envSchema = z.object({
     ),
 
   // ===== KAFKA MESSAGE BROKER =====
+  
   /**
-   * Địa chỉ Kafka broker
-   * Format: host:port hoặc host1:port1,host2:port2 (nếu cluster)
-   * Local Docker: kafka:9092 (internal) hoặc localhost:9094 (external)
+   * KAFKA_BROKER: Kafka broker address(es)
+   * ==================================
+   * Required: yes
+   * Format: host:port or host1:port1,host2:port2 (cluster)
+   * 
+   * Examples:
+   * - "localhost:9092" (single, local Docker)
+   * - "kafka:9092" (internal Docker network)
+   * - "kafka1:9092,kafka2:9092,kafka3:9092" (cluster)
+   * - "kafka.prod.io:9092" (production)
+   * 
+   * Consumer/Producer use this to:
+   * - Connect to broker
+   * - Subscribe to topics
+   * - Publish messages
+   * - Auto-create topics (if enabled)
    */
   KAFKA_BROKER: z.string().min(1, 'KAFKA_BROKER không thể trống'),
 
   /**
-   * Username cho Kafka (nếu có authentication)
-   * Optional - có thể để trống
+   * KAFKA_USERNAME: Optional SASL authentication
+   * ========================================
+   * Required: only if Kafka requires auth
+   * 
+   * Used with: KAFKA_PASSWORD
+   * Mechanism: PLAIN SASL (username + password)
+   * 
+   * If not provided: connects without authentication
+   * (only works for open Kafka brokers)
    */
   KAFKA_USERNAME: z.string().optional(),
 
   /**
-   * Password cho Kafka (nếu có authentication)
-   * Optional - có thể để trống
+   * KAFKA_PASSWORD: Optional SASL password
+   * ==================================
+   * Required: only if Kafka requires auth
+   * 
+   * Used with: KAFKA_USERNAME
+   * Secure: should be kept in secrets/vault
    */
   KAFKA_PASSWORD: z.string().optional(),
 
   // ===== REDIS CACHE =====
+  
   /**
-   * Connection string Redis
-   * Format: redis://[:password@]host:port/db
-   * Ví dụ: redis://localhost:6379/0
+   * REDIS_URL: Redis cache connection string
+   * ======================================
+   * Required: yes
+   * Format: redis://[:password@]host[:port]/[database]
+   * 
+   * Examples:
+   * - "redis://localhost:6379/0" (local, db 0)
+   * - "redis://:mypass@redis.io:6379/1" (with password, db 1)
+   * - "redis://redis:6379/0" (Docker, internal network)
+   * - "rediss://cache.prod.io:6380/0" (production, SSL)
+   * 
+   * Redis uses:
+   * - Cache course context (24-hour TTL)
+   * - Cache course statistics
+   * - Session data (optional)
+   * 
+   * Performance: 10-50x faster than database for cached queries
    */
   REDIS_URL: z
     .string()
@@ -127,46 +266,97 @@ const envSchema = z.object({
       'REDIS_URL phải bắt đầu bằng redis:// hoặc rediss://'
     ),
 
-  // ===== GOOGLE SHEETS API (Optional) =====
+  // ===== GOOGLE SHEETS API (OPTIONAL) =====
+  
   /**
-   * JSON credentials cho Google Sheets API
-   * Dạng: stringified JSON từ Google Cloud Service Account
-   * Optional - chỉ cần nếu sử dụng sheetsService
+   * GOOGLE_CREDENTIALS_JSON: Google Cloud service account credentials
+   * ============================================================
+   * Required: only if using Google Sheets integration
+   * Format: JSON string (entire service account key as JSON)
+   * 
+   * How to get:
+   * 1. Go to Google Cloud Console
+   * 2. Create Service Account
+   * 3. Create key → JSON
+   * 4. Download JSON file
+   * 5. Keep content secret (contains private key!)
+   * 
+   * Alternative to .env:
+   * - Set GOOGLE_CREDENTIALS_JSON_FILE=/path/to/key.json
+   * - Config will read file and load into GOOGLE_CREDENTIALS_JSON
    */
   GOOGLE_CREDENTIALS_JSON: z.string().optional(),
 
   /**
-   * ID của Google Sheet để đồng bộ dữ liệu
-   * Optional - chỉ cần nếu sử dụng sheetsService
-   * Ví dụ: 1A2B3C4D5E6F7G8H9I0J...
+   * GOOGLE_SHEET_ID: ID of Google Sheet to sync
+   * ========================================
+   * Required: only if using Google Sheets integration
+   * Format: long string of alphanumeric characters
+   * 
+   * Example: "1A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7Q8R9S0T"
+   * 
+   * Found in: Google Sheet URL
+   * URL: https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit
    */
   GOOGLE_SHEET_ID: z.string().optional(),
 
   // ===== LOGGING =====
+  
   /**
-   * Log level: error | warn | info | debug
-   * Ít level chi tiết hơn: error < warn < info < debug
+   * LOG_LEVEL: Minimum log level to output
+   * ==================================
+   * Values: 'error' | 'warn' | 'info' | 'debug'
+   * Severity: error < warn < info < debug
+   * 
+   * Example: LOG_LEVEL=info
+   * - Shows: error, warn, info messages
+   * - Hides: debug messages
+   * 
+   * Default: 'info' (balance of detail and noise)
    */
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 
   /**
-   * Có ghi log vào file không: true/false
-   * Default: false (chỉ console)
+   * LOG_TO_FILE: Write logs to file in addition to console
+   * ================================================
+   * Values: 'true' | 'false' (string, converted to boolean)
+   * Default: 'false' (console only)
+   * 
+   * If true: logs written to logs/ directory
+   * Useful: production troubleshooting, audit trails
    */
   LOG_TO_FILE: z.string().transform(val => val === 'true').default('false'),
 
-  // ===== DISCORD INTEGRATION (Optional) =====
+  // ===== DISCORD INTEGRATION (OPTIONAL) =====
+  
   /**
-   * Discord Bot token (nếu Logic Service giao tiếp trực tiếp với Bot)
-   * Optional - thường Bot gửi qua Kafka, không cần token ở đây
+   * DISCORD_BOT_TOKEN: Discord bot authentication token
+   * ================================================
+   * Required: only if Logic Service talks directly to Discord
+   * 
+   * Note: Usually not needed here
+   * - Discord Bot listens for student activities
+   * - Bot publishes events to Kafka
+   * - Logic Service receives via consumer
+   * - No direct Discord communication needed
    */
   DISCORD_BOT_TOKEN: z.string().optional(),
 
-  // ===== MINIO / FILE STORAGE (Optional) =====
+  // ===== MINIO / FILE STORAGE (OPTIONAL) =====
+  
   /**
-   * MinIO server endpoint (S3-compatible)
-   * Ví dụ: http://localhost:9000 hoặc https://minio.example.com
-   * Optional - dùng để backup file từ Discord
+   * MINIO_ENDPOINT: MinIO (S3-compatible) server address
+   * ================================================
+   * Required: only if backing up files to object storage
+   * Format: http://host:port or https://host:port
+   * 
+   * Examples:
+   * - "http://localhost:9000" (local)
+   * - "https://minio.prod.io" (production)
+   * 
+   * MinIO uses:
+   * - Backup student uploads (PDFs, documents)
+   * - Long-term storage outside Discord
    */
   MINIO_ENDPOINT: z
     .string()
@@ -177,26 +367,38 @@ const envSchema = z.object({
     .optional(),
 
   /**
-   * MinIO access key
-   * Optional - dùng kèm MINIO_ENDPOINT
+   * MINIO_ACCESS_KEY: MinIO authentication key
+   * =========================================
+   * Required: only if using MinIO
+   * Similar to AWS access key
    */
   MINIO_ACCESS_KEY: z.string().optional(),
 
   /**
-   * MinIO secret key
-   * Optional - dùng kèm MINIO_ENDPOINT
+   * MINIO_SECRET_KEY: MinIO secret password
+   * ====================================
+   * Required: only if using MinIO
+   * Similar to AWS secret key
+   * Keep secret!
    */
   MINIO_SECRET_KEY: z.string().optional(),
 
   /**
-   * MinIO bucket name
-   * Optional - dùng kèm MINIO_ENDPOINT
+   * MINIO_BUCKET: MinIO bucket name (like S3 bucket)
+   * ============================================
+   * Required: only if using MinIO
+   * Example: "logic-service-files", "uploads", "documents"
    */
   MINIO_BUCKET: z.string().optional(),
 }).superRefine((data, ctx) => {
+  // ===== Custom Validation Logic =====
+  // Checks that depend on other variables or complex logic
+  
   const token = data.SERVICE_TOKEN_SECRET?.trim();
 
+  // Production-specific requirements
   if (data.NODE_ENV === 'production') {
+    // SERVICE_TOKEN_SECRET is required in production
     if (!token) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -206,6 +408,7 @@ const envSchema = z.object({
       return;
     }
 
+    // Must be strong (min 16 chars) in production
     if (token.length < 16) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -216,6 +419,7 @@ const envSchema = z.object({
     return;
   }
 
+  // Development: if provided, should be min 16 chars
   if (token && token.length < 16) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -225,53 +429,67 @@ const envSchema = z.object({
   }
 });
 
-// ============================================
-// PARSE & VALIDATE
-// ============================================
+// ===== PARSE & VALIDATE ENVIRONMENT =====
 
 /**
- * Parse biến môi trường từ process.env
- * Zod sẽ kiểm tra:
- * 1. Biến bắt buộc có tồn tại không
- * 2. Kiểu dữ liệu có đúng không
- * 3. Giá trị có hợp lệ không (URL, enum, v.v.)
+ * Parse and Validate All Environment Variables
+ * ==========================================
+ * 
+ * Zod.parse() will:
+ * 1. Check required variables exist
+ * 2. Validate types (coerce string → number if needed)
+ * 3. Apply custom validation rules
+ * 4. Set defaults
+ * 5. Throw ZodError if validation fails
  */
 let parsedEnv: z.infer<typeof envSchema>;
 
 try {
   parsedEnv = envSchema.parse(process.env);
 } catch (error) {
+  // If validation fails: print all errors and exit immediately
+  // This prevents startup with invalid configuration
   if (error instanceof z.ZodError) {
     console.error('❌ Environment validation error:');
     error.errors.forEach(err => {
       const path = err.path.join('.');
       console.error(`  • ${path}: ${err.message}`);
     });
-    process.exit(1);
+    process.exit(1);  // Halt immediately with error code 1
   }
   throw error;
 }
 
-// ============================================
-// EXPORT FINAL CONFIG
-// ============================================
+// ===== EXPORT FINAL CONFIG OBJECT =====
 
 /**
- * Config object - sử dụng xuyên suốt ứng dụng
- * Đã được validate type-safe bởi Zod
- *
- * Cách dùng:
+ * Config Object - Central Configuration
+ * ===================================
+ * 
+ * Exported as `config` constant
+ * Type-safe: TypeScript knows all properties
+ * Validated: Zod guaranteed all values correct
+ * 
+ * Usage throughout codebase:
  * ```typescript
- * import { config } from './config/env';
- * console.log(config.DATABASE_URL);
- * console.log(config.PORT);
+ * import { config } from '../config/env';
+ * 
+ * const port = config.port;  // 8003
+ * const db = config.databaseUrl;  // postgresql://...
+ * const isDev = config.isDev;  // boolean
+ * 
+ * if (config.isProd) {
+ *   // production-specific code
+ * }
  * ```
  */
 export const config = {
-  // Node.js
+  // Environment flags (convenience computed properties)
   nodeEnv: parsedEnv.NODE_ENV,
   isDev: parsedEnv.NODE_ENV === 'development',
   isProd: parsedEnv.NODE_ENV === 'production',
+  
+  // Server
   port: parsedEnv.PORT,
   serviceTokenSecret: parsedEnv.SERVICE_TOKEN_SECRET?.trim() || 'dev-local-service-token-change-me',
 
@@ -286,7 +504,7 @@ export const config = {
   // Redis
   redisUrl: parsedEnv.REDIS_URL,
 
-  // Google Sheets
+  // Google Sheets (optional)
   googleCredentialsJson: parsedEnv.GOOGLE_CREDENTIALS_JSON,
   googleSheetId: parsedEnv.GOOGLE_SHEET_ID,
 
@@ -294,26 +512,44 @@ export const config = {
   logLevel: parsedEnv.LOG_LEVEL,
   logToFile: parsedEnv.LOG_TO_FILE,
 
-  // Discord
+  // Discord (optional)
   discordBotToken: parsedEnv.DISCORD_BOT_TOKEN,
 
-  // MinIO
+  // MinIO (optional)
   minioEndpoint: parsedEnv.MINIO_ENDPOINT,
   minioAccessKey: parsedEnv.MINIO_ACCESS_KEY,
   minioSecretKey: parsedEnv.MINIO_SECRET_KEY,
   minioBucket: parsedEnv.MINIO_BUCKET,
-} as const;
+} as const;  // as const = all properties are readonly (immutable)
 
-// ============================================
-// TYPE EXPORTS
-// ============================================
+// ===== TYPE EXPORT =====
 
 /**
- * Type cho config object - dùng trong TypeScript
+ * Config Type for TypeScript
+ * =========================
+ * Allows type annotations:
+ * 
+ * ```typescript
+ * function initDatabase(config: Config) {
+ *    // config is type-safe here
+ * }
+ * ```
  */
 export type Config = typeof config;
 
-// Debug log (chỉ trong development)
+// ===== DEBUG LOGGING (DEVELOPMENT ONLY) =====
+
+/**
+ * Print Configuration Summary in Development
+ * ========================================
+ * Shows:
+ * - Environment name
+ * - Port
+ * - Database (endpoint only, no credentials)
+ * - Kafka broker
+ * - Redis (endpoint only, no credentials)
+ * - Warnings (SERVICE_TOKEN_SECRET not set in dev)
+ */
 if (config.isDev) {
   console.log('✅ Environment configured:');
   console.log(`  • NODE_ENV: ${config.nodeEnv}`);
