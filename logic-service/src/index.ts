@@ -1,63 +1,63 @@
-/**
- * Logic Service Entry Point
- * ==========================
- * 
- * Mục đích:
- * - Start Express.js server
- * - Initialize Kafka consumer (subscribe to events)
- * - Connect to Redis cache
- * - Handle graceful shutdown
- * 
- * Startup Sequence:
- * 1. Load environment variables (.env file)
- * 2. Start Express listening on PORT
- * 3. Connect to Kafka consumer (subscribe to topics)
- * 4. Ready to receive requests and Kafka events
- * 5. Listen for shutdown signals (SIGTERM, SIGINT)
- * 
- * Server Lifecycle:
- * ┌─ index.ts starts ─────────────────────┐
- * │                                       │
- * ├─ Load .env variables ────────────────┤
- * │  PORT, DATABASE_URL, REDIS_URL, etc. │
- * │                                       │
- * ├─ app.listen(PORT) ───────────────────┤
- * │  Express listens for HTTP requests   │
- * │  /health, /v1/users, /v1/courses,... │
- * │                                       │
- * ├─ startConsumer() ────────────────────┤
- * │  Kafka consumer subscribes to:       │
- * │  - SUBMISSION_CREATED                │
- * │  - WEB_QUIZ_SUBMITTED                │
- * │  - AI_RESPONSE_GRADE                 │
- * │  - COMMAND_REQUESTED                 │
- * │  - etc                               │
- * │                                       │
- * ├─ Ready for Production ────────────────┤
- * │  Receives HTTP requests & events     │
- * │  Processes until SIGTERM/SIGINT      │
- * │                                       │
- * ├─ Shutdown Signal ────────────────────┤
- * │  SIGTERM (Kubernetes) or SIGINT      │
- * │  (Ctrl+C in terminal)                │
- * │                                       │
- * ├─ Graceful Shutdown ──────────────────┤
- * │  1. Stop listening for HTTP          │
- * │  2. Drain Kafka consumer             │
- * │  3. Flush Kafka producer             │
- * │  4. Close Redis connection           │
- * │  5. Exit (exit code 0)               │
- * │                                       │
- * └─ Process Terminates ─────────────────┘
- * 
- * Error Handling:
- * - Uncaught exceptions → exit(1)
- * - Unhandled promise rejections → exit(1)
- * - Startup errors → exit(1)
- * - Shutdown errors → exit(1) after logging
- * 
- * Dùng bởi: npm start, Docker, Kubernetes, Docker Compose
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import 'dotenv/config'; // Load .env vars FIRST
 import app from './app';
