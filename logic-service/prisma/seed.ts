@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -6,7 +5,6 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Clear existing data
   await prisma.grade.deleteMany();
   await prisma.submission.deleteMany();
   await prisma.quizResult.deleteMany();
@@ -18,7 +16,6 @@ async function main() {
   await prisma.course.deleteMany();
   await prisma.user.deleteMany();
 
-  // 1. Create Users
   const users = await prisma.user.createMany({
     data: [
       {
@@ -47,14 +44,12 @@ async function main() {
 
   console.log(`✅ Created ${users.count} users`);
 
-  // Get teachers
   const teacher = await prisma.user.findUnique({
     where: { userCode: 'GV001' },
   });
 
   if (!teacher) throw new Error('Teacher not found');
 
-  // 2. Create Course
   const course = await prisma.course.create({
     data: {
       code: 'INT3306',
@@ -68,7 +63,6 @@ async function main() {
 
   console.log(`✅ Created course: ${course.code}`);
 
-  // 3. Create Enrollments
   const students = await prisma.user.findMany({
     where: { role: 'STUDENT' },
   });
@@ -87,7 +81,6 @@ async function main() {
 
   console.log(`✅ Created ${enrollments.length} enrollments`);
 
-  // 4. Create Documents
   const document = await prisma.document.create({
     data: {
       courseId: course.id,
@@ -101,7 +94,6 @@ async function main() {
 
   console.log(`✅ Created document: ${document.fileName}`);
 
-  // 5. Create Assignment
   const assignment = await prisma.assignment.create({
     data: {
       courseId: course.id,
@@ -113,7 +105,6 @@ async function main() {
 
   console.log(`✅ Created assignment: ${assignment.title}`);
 
-  // 6. Create Submission
   const student = students[0];
   const submission = await prisma.submission.create({
     data: {
@@ -127,7 +118,6 @@ async function main() {
 
   console.log(`✅ Created submission for ${student.fullName}`);
 
-  // 7. Create Grade
   const grade = await prisma.grade.create({
     data: {
       submissionId: submission.id,
@@ -139,7 +129,6 @@ async function main() {
 
   console.log(`✅ Created grade: ${grade.score}`);
 
-  // 8. Create Quiz
   const quiz = await prisma.quiz.create({
     data: {
       courseId: course.id,
@@ -161,7 +150,6 @@ async function main() {
 
   console.log(`✅ Created quiz: ${quiz.title}`);
 
-  // 9. Create QuizResult
   const quizResult = await prisma.quizResult.create({
     data: {
       quizId: quiz.id,
@@ -173,7 +161,6 @@ async function main() {
 
   console.log(`✅ Created quiz result: ${quizResult.score}`);
 
-  // 10. Create Ticket
   const ticket = await prisma.ticket.create({
     data: {
       studentId: student.id,

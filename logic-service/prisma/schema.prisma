@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,8 +6,6 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-
-// ============ ENUMS ============
 
 enum Role {
   STUDENT
@@ -42,9 +37,6 @@ enum TicketStatus {
   CLOSED
 }
 
-// ============ MODELS ============
-
-// 5.3.3.1. User
 model User {
   id        String   @id @default(uuid())
   discordId String   @unique
@@ -56,7 +48,6 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   enrollments              Enrollment[]
   uploadedDocuments        Document[]
   submittedAssignments     Submission[]
@@ -66,7 +57,6 @@ model User {
   quizResults              QuizResult[]
 }
 
-// 5.3.3.2. Course
 model Course {
   id               String   @id @default(uuid())
   code             String   @unique
@@ -78,7 +68,6 @@ model Course {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  // Relations
   instructor       User     @relation("teacherCourses", fields: [instructorId], references: [id])
   enrollments      Enrollment[]
   documents        Document[]
@@ -89,7 +78,6 @@ model Course {
   @@index([instructorId])
 }
 
-// 5.3.3.2. Enrollment
 model Enrollment {
   id        String   @id @default(uuid())
   userId    String
@@ -98,7 +86,6 @@ model Enrollment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
@@ -107,21 +94,19 @@ model Enrollment {
   @@index([courseId])
 }
 
-// 5.3.3.3. Document
 model Document {
   id              String   @id @default(uuid())
   courseId        String
   uploadedById    String
   fileName        String
   fileUrl         String
-  fileType        String   // pdf|pptx|docx|txt
+  fileType        String
   isAiIndexed     Boolean  @default(false)
   aiSummary       String?  @db.Text
   discordMessageId String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  // Relations
   course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   uploadedBy      User     @relation(fields: [uploadedById], references: [id])
   quizzes         Quiz[]
@@ -130,7 +115,6 @@ model Document {
   @@index([uploadedById])
 }
 
-// 5.3.3.4. Assignment
 model Assignment {
   id        String   @id @default(uuid())
   courseId  String
@@ -141,14 +125,12 @@ model Assignment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relations
   course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   submissions Submission[]
 
   @@index([courseId])
 }
 
-// 5.3.3.4. Submission
 model Submission {
   id           String   @id @default(uuid())
   assignmentId String
@@ -161,7 +143,6 @@ model Submission {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Relations
   assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
   student      User     @relation(fields: [studentId], references: [id])
   grade        Grade?
@@ -171,7 +152,6 @@ model Submission {
   @@index([studentId])
 }
 
-// 5.3.3.4. Grade
 model Grade {
   id           String   @id @default(uuid())
   submissionId String   @unique
@@ -182,7 +162,6 @@ model Grade {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // Relations
   submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
   gradedBy     User     @relation(fields: [gradedById], references: [id])
 
@@ -190,7 +169,6 @@ model Grade {
   @@index([gradedById])
 }
 
-// 5.3.3.5. Quiz
 model Quiz {
   id            String   @id @default(uuid())
   courseId      String
@@ -204,7 +182,6 @@ model Quiz {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Relations
   course        Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   document      Document @relation(fields: [documentId], references: [id])
   results       QuizResult[]
@@ -213,7 +190,6 @@ model Quiz {
   @@index([documentId])
 }
 
-// 5.3.3.5. QuizResult
 model QuizResult {
   id          String   @id @default(uuid())
   quizId      String
@@ -224,7 +200,6 @@ model QuizResult {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
   quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
   student     User     @relation(fields: [studentId], references: [id])
 
@@ -233,7 +208,6 @@ model QuizResult {
   @@index([studentId])
 }
 
-// 5.3.3.5. Ticket
 model Ticket {
   id         String   @id @default(uuid())
   studentId  String
@@ -245,7 +219,6 @@ model Ticket {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  // Relations
   student    User     @relation(fields: [studentId], references: [id])
   course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 

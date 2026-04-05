@@ -27,17 +27,16 @@ const { JWT } = require('google-auth-library');
       console.log(`   ${i+1}. "${sheet.properties.title}"`);
     });
 
-    // Try to read from first sheet
     const firstSheetName = res.data.sheets[0].properties.title;
     console.log(`\n🔍 Testing read from "${firstSheetName}"...`);
-    
+
     const readRes = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range: `${firstSheetName}!A1:C10`,
     });
 
     console.log(`✅ Successfully read ${readRes.data.values?.length || 0} rows from sheet`);
-    
+
   } catch (error) {
     console.error('Error:', error.message);
   }
