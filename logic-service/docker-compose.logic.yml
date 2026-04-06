@@ -1,0 +1,16 @@
+services:
+  logic-service:
+    build:
+      context: ./logic-service
+      dockerfile: Dockerfile
+    container_name: logic-service
+    ports:
+      - "8003:8003"
+    env_file:
+      - ./logic-service/.env.docker
+    environment:
+      - ENV_FILE=.env.docker
+    depends_on:
+      - postgres
+      - redis
+      - kafka

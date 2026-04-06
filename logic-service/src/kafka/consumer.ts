@@ -82,13 +82,13 @@ const loadHandlers = async () => {
       gradeHandler,
       quizHandler,
     ] = await Promise.all([
-      import('./handlers/documentHandler.js'),
-      import('./handlers/submissionHandler.js'),
-      import('./handlers/commandHandler.js'),
-      import('./handlers/contextHandler.js'),
-      import('./handlers/aiQuizHandler.js'),
-      import('./handlers/gradeHandler.js'),
-      import('./handlers/quizHandler.js'),
+      import('./handlers/documentHandler'),
+      import('./handlers/submissionHandler'),
+      import('./handlers/commandHandler'),
+      import('./handlers/contextHandler'),
+      import('./handlers/aiQuizHandler'),
+      import('./handlers/gradeHandler'),
+      import('./handlers/quizHandler'),
     ]);
 
     const handlers: Record<string, (payload: any) => Promise<void>> = {

@@ -16,162 +16,192 @@ async function main() {
   await prisma.course.deleteMany();
   await prisma.user.deleteMany();
 
-  const users = await prisma.user.createMany({
-    data: [
-      {
-        discordId: '123456789',
-        userCode: 'SV001',
-        fullName: 'Nguyễn Văn A',
-        email: 'nguyenvana@neu.edu.vn',
-        role: 'STUDENT',
+  const userSeeds = [
+    { userCode: 'GV001', fullName: 'Teacher 01', role: 'TEACHER' as const },
+    { userCode: 'GV002', fullName: 'Teacher 02', role: 'TEACHER' as const },
+    { userCode: 'AD001', fullName: 'Admin 01', role: 'ADMIN' as const },
+    { userCode: 'TR001', fullName: 'Training 01', role: 'TRAINING' as const },
+    { userCode: 'SV001', fullName: 'Student 01', role: 'STUDENT' as const },
+    { userCode: 'SV002', fullName: 'Student 02', role: 'STUDENT' as const },
+    { userCode: 'SV003', fullName: 'Student 03', role: 'STUDENT' as const },
+    { userCode: 'SV004', fullName: 'Student 04', role: 'STUDENT' as const },
+    { userCode: 'SV005', fullName: 'Student 05', role: 'STUDENT' as const },
+    { userCode: 'SV006', fullName: 'Student 06', role: 'STUDENT' as const },
+  ];
+
+  const users = [];
+  for (let i = 0; i < userSeeds.length; i += 1) {
+    const seed = userSeeds[i];
+    const user = await prisma.user.create({
+      data: {
+        discordId: `discord-${String(i + 1).padStart(3, '0')}`,
+        userCode: seed.userCode,
+        fullName: seed.fullName,
+        email: `${seed.userCode.toLowerCase()}@example.edu`,
+        role: seed.role,
       },
-      {
-        discordId: '987654321',
-        userCode: 'SV002',
-        fullName: 'Trần Thị B',
-        email: 'tranthib@neu.edu.vn',
-        role: 'STUDENT',
+    });
+    users.push(user);
+  }
+  console.log(`✅ Created ${users.length} users`);
+
+  const teachers = users.filter((u) => u.role === 'TEACHER');
+  const students = users.filter((u) => u.role === 'STUDENT');
+
+  const courses = [];
+  for (let i = 0; i < 10; i += 1) {
+    const instructor = teachers[i % teachers.length];
+    const course = await prisma.course.create({
+      data: {
+        code: `INT33${String(i + 1).padStart(2, '0')}`,
+        name: `Course ${String(i + 1).padStart(2, '0')}`,
+        semester: 'HK1_2026-2027',
+        discordServerId: `guild-${String(i + 1).padStart(3, '0')}`,
+        instructorId: instructor.id,
+        status: 'ACTIVE',
       },
-      {
-        discordId: '111111111',
-        userCode: 'GV001',
-        fullName: 'Phạm Văn C',
-        email: 'phamvanc@neu.edu.vn',
-        role: 'TEACHER',
+    });
+    courses.push(course);
+  }
+  console.log(`✅ Created ${courses.length} courses`);
+
+  const enrollments = [];
+  for (let i = 0; i < 10; i += 1) {
+    const student = students[i % students.length];
+    const course = courses[i];
+    const enrollment = await prisma.enrollment.create({
+      data: {
+        userId: student.id,
+        courseId: course.id,
+        status: 'active',
       },
-    ],
-  });
-
-  console.log(`✅ Created ${users.count} users`);
-
-  const teacher = await prisma.user.findUnique({
-    where: { userCode: 'GV001' },
-  });
-
-  if (!teacher) throw new Error('Teacher not found');
-
-  const course = await prisma.course.create({
-    data: {
-      code: 'INT3306',
-      name: 'Service-Oriented Architecture',
-      semester: 'HK1_2025-2026',
-      discordServerId: 'guild123',
-      instructorId: teacher.id,
-      status: 'ACTIVE',
-    },
-  });
-
-  console.log(`✅ Created course: ${course.code}`);
-
-  const students = await prisma.user.findMany({
-    where: { role: 'STUDENT' },
-  });
-
-  const enrollments = await Promise.all(
-    students.map((student) =>
-      prisma.enrollment.create({
-        data: {
-          userId: student.id,
-          courseId: course.id,
-          status: 'active',
-        },
-      })
-    )
-  );
-
+    });
+    enrollments.push(enrollment);
+  }
   console.log(`✅ Created ${enrollments.length} enrollments`);
 
-  const document = await prisma.document.create({
-    data: {
-      courseId: course.id,
-      uploadedById: teacher.id,
-      fileName: 'Slide_Lec_01.pdf',
-      fileUrl: 'https://example.com/slide1.pdf',
-      fileType: 'pdf',
-      aiSummary: 'Giới thiệu về SOA và microservices',
-    },
-  });
-
-  console.log(`✅ Created document: ${document.fileName}`);
-
-  const assignment = await prisma.assignment.create({
-    data: {
-      courseId: course.id,
-      title: 'Build Simple REST API',
-      deadline: new Date('2025-04-15'),
-      maxScore: 10,
-    },
-  });
-
-  console.log(`✅ Created assignment: ${assignment.title}`);
-
-  const student = students[0];
-  const submission = await prisma.submission.create({
-    data: {
-      assignmentId: assignment.id,
-      studentId: student.id,
-      fileUrl: 'https://example.com/submission1.zip',
-      isLate: false,
-      status: 'PENDING',
-    },
-  });
-
-  console.log(`✅ Created submission for ${student.fullName}`);
-
-  const grade = await prisma.grade.create({
-    data: {
-      submissionId: submission.id,
-      score: 8.5,
-      comment: 'Good implementation, needs error handling',
-      gradedById: teacher.id,
-    },
-  });
-
-  console.log(`✅ Created grade: ${grade.score}`);
-
-  const quiz = await prisma.quiz.create({
-    data: {
-      courseId: course.id,
-      documentId: document.id,
-      title: 'Quiz 1: SOA Concepts',
-      status: 'PUBLISHED',
-      questionsJson: {
-        questions: [
-          {
-            id: 'q1',
-            text: 'What is SOA?',
-            options: ['A', 'B', 'C', 'D'],
-            correctAnswer: 'A',
-          },
-        ],
+  const documents = [];
+  for (let i = 0; i < 10; i += 1) {
+    const course = courses[i];
+    const document = await prisma.document.create({
+      data: {
+        courseId: course.id,
+        uploadedById: course.instructorId,
+        fileName: `Lecture_${String(i + 1).padStart(2, '0')}.pdf`,
+        fileUrl: `https://example.com/files/lecture-${i + 1}.pdf`,
+        fileType: 'pdf',
+        isAiIndexed: true,
+        aiSummary: `AI summary for course ${course.code}`,
       },
-    },
-  });
+    });
+    documents.push(document);
+  }
+  console.log(`✅ Created ${documents.length} documents`);
 
-  console.log(`✅ Created quiz: ${quiz.title}`);
+  const assignments = [];
+  for (let i = 0; i < 10; i += 1) {
+    const course = courses[i];
+    const assignment = await prisma.assignment.create({
+      data: {
+        courseId: course.id,
+        title: `Assignment ${String(i + 1).padStart(2, '0')}`,
+        deadline: new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000),
+        maxScore: 10,
+      },
+    });
+    assignments.push(assignment);
+  }
+  console.log(`✅ Created ${assignments.length} assignments`);
 
-  const quizResult = await prisma.quizResult.create({
-    data: {
-      quizId: quiz.id,
-      studentId: student.id,
-      score: 9.0,
-      answersJson: { answers: ['A', 'B', 'A'] },
-    },
-  });
+  const submissions = [];
+  for (let i = 0; i < 10; i += 1) {
+    const student = students[i % students.length];
+    const assignment = assignments[i];
+    const submission = await prisma.submission.create({
+      data: {
+        assignmentId: assignment.id,
+        studentId: student.id,
+        fileUrl: `https://example.com/submissions/submission-${i + 1}.zip`,
+        isLate: false,
+        status: 'GRADED',
+      },
+    });
+    submissions.push(submission);
+  }
+  console.log(`✅ Created ${submissions.length} submissions`);
 
-  console.log(`✅ Created quiz result: ${quizResult.score}`);
+  const grades = [];
+  for (let i = 0; i < 10; i += 1) {
+    const course = courses[i];
+    const grade = await prisma.grade.create({
+      data: {
+        submissionId: submissions[i].id,
+        score: 6 + (i % 5),
+        comment: `Feedback for submission ${i + 1}`,
+        gradedById: course.instructorId,
+      },
+    });
+    grades.push(grade);
+  }
+  console.log(`✅ Created ${grades.length} grades`);
 
-  const ticket = await prisma.ticket.create({
-    data: {
-      studentId: student.id,
-      courseId: course.id,
-      question: 'What is the difference between SOA and microservices?',
-      status: 'AI_ANSWERED',
-      aiAnswer: 'SOA is service-oriented architecture...',
-    },
-  });
+  const quizzes = [];
+  for (let i = 0; i < 10; i += 1) {
+    const course = courses[i];
+    const quiz = await prisma.quiz.create({
+      data: {
+        courseId: course.id,
+        documentId: documents[i].id,
+        title: `Quiz ${String(i + 1).padStart(2, '0')}`,
+        status: 'PUBLISHED',
+        timeLimitMins: 15 + i,
+        deadline: new Date(Date.now() + (i + 2) * 24 * 60 * 60 * 1000),
+        questionsJson: {
+          questions: [
+            {
+              id: `q-${i + 1}-1`,
+              text: `Question ${i + 1}A`,
+              options: ['A', 'B', 'C', 'D'],
+              correctAnswer: 'A',
+            },
+          ],
+        },
+      },
+    });
+    quizzes.push(quiz);
+  }
+  console.log(`✅ Created ${quizzes.length} quizzes`);
 
-  console.log(`✅ Created ticket: ${ticket.id.slice(0, 8)}`);
+  const quizResults = [];
+  for (let i = 0; i < 10; i += 1) {
+    const student = students[i % students.length];
+    const quizResult = await prisma.quizResult.create({
+      data: {
+        quizId: quizzes[i].id,
+        studentId: student.id,
+        score: 5 + (i % 6),
+        answersJson: { answers: ['A', 'B', 'C'] },
+      },
+    });
+    quizResults.push(quizResult);
+  }
+  console.log(`✅ Created ${quizResults.length} quiz results`);
+
+  const tickets = [];
+  for (let i = 0; i < 10; i += 1) {
+    const student = students[i % students.length];
+    const ticket = await prisma.ticket.create({
+      data: {
+        studentId: student.id,
+        courseId: courses[i].id,
+        question: `Question ticket #${i + 1} for course ${courses[i].code}`,
+        status: i % 2 === 0 ? 'AI_ANSWERED' : 'OPEN',
+        aiAnswer: i % 2 === 0 ? `Auto answer for ticket #${i + 1}` : null,
+      },
+    });
+    tickets.push(ticket);
+  }
+  console.log(`✅ Created ${tickets.length} tickets`);
 
   console.log('\n✨ Database seeded successfully!');
 }

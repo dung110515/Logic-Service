@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { resolve } from 'path';
 import { readFileSync } from 'fs';
 
-const envFilePath = resolve(process.cwd(), '.env');
+const envFileName = process.env.ENV_FILE || '.env.local';
+const envFilePath = resolve(process.cwd(), envFileName);
 const dotenvResult = dotenv.config({ path: envFilePath });
 
 if (dotenvResult.error) {

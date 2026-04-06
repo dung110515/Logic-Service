@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import app from './app';
 import { config } from './config/env';
 import { startConsumer, stopConsumer } from './kafka/consumer';
@@ -13,7 +12,7 @@ async function startApp(): Promise<void> {
   try {
     console.log('🚀 Starting Logic Service...');
     console.log(`📝 Environment: ${config.nodeEnv}`);
-    console.log(`🔧 Configuration loaded from .env`);
+    console.log(`🔧 Configuration loaded from ${process.env.ENV_FILE || '.env.local'}`);
 
     server = app.listen(PORT, () => {
       console.log(`✅ Express server running on port ${PORT}`);

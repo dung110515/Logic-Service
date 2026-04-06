@@ -6,12 +6,17 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "dev": "npm run dev:local",
+    "dev:local": "set ENV_FILE=.env.local&& ts-node src/index.ts",
+    "dev:docker-env": "set ENV_FILE=.env.docker&& ts-node src/index.ts",
     "watch": "tsc --watch",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:seed": "ts-node prisma/seed.ts",
-    "prisma:studio": "prisma studio --schema prisma/schema.prisma"
+    "prisma:studio": "prisma studio --schema prisma/schema.prisma",
+    "docker:up": "docker compose -f ..\\docker-compose.yml -f docker-compose.logic.yml up -d --build logic-service",
+    "docker:down": "docker compose -f ..\\docker-compose.yml -f docker-compose.logic.yml stop logic-service",
+    "docker:logs": "docker compose -f ..\\docker-compose.yml -f docker-compose.logic.yml logs -f logic-service"
   },
   "keywords": [],
   "author": "",

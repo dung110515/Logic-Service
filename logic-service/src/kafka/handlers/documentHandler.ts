@@ -1,6 +1,7 @@
 import { FileUploadedPayload } from '../../types';
 import { prisma } from '../../lib/prisma';
 import { publishAISummarizeDoc } from '../producer';
+import { canUploadFromSource, isMinioEnabled, uploadDocumentToMinio } from '../../lib/minio';
 
 const SUPPORTED_AI_TYPES = ['pdf', 'docx', 'pptx', 'doc'];
 
@@ -16,12 +17,37 @@ export const handleFileUploaded = async (payload: FileUploadedPayload): Promise<
       return;
     }
 
+    let persistedFileUrl = data.fileId;
+    let minioUploadState = 'disabled';
+
+    if (isMinioEnabled()) {
+      if (!canUploadFromSource(data.fileId)) {
+        minioUploadState = 'skipped_non_url_source';
+        console.warn(`⚠️ MinIO enabled but fileId is not an HTTP URL. Fallback to original fileId: ${data.fileId}`);
+      } else {
+        try {
+          const uploaded = await uploadDocumentToMinio({
+            sourceUrl: data.fileId,
+            fileName: data.fileName,
+            mimeType: data.mimeType,
+            courseId: data.courseId,
+          });
+          persistedFileUrl = uploaded.fileUrl;
+          minioUploadState = `uploaded:${uploaded.objectKey}`;
+          console.log(`✅ Uploaded file to MinIO: ${uploaded.objectKey}`);
+        } catch (error) {
+          minioUploadState = 'upload_failed_fallback';
+          console.warn('⚠️ Upload to MinIO failed, fallback to original fileId:', error);
+        }
+      }
+    }
+
     const document = await prisma.document.create({
       data: {
         courseId: data.courseId,
         uploadedById: data.uploadedBy,
         fileName: data.fileName,
-        fileUrl: data.fileId,
+        fileUrl: persistedFileUrl,
         fileType: data.mimeType.split('/')[1] || 'unknown',
       },
     });
@@ -52,6 +78,8 @@ export const handleFileUploaded = async (payload: FileUploadedPayload): Promise<
       fileName: data.fileName,
       courseId: data.courseId,
       needsAI: needsAISummarization,
+      minioUploadState,
+      persistedFileUrl,
     });
   } catch (error) {
 
